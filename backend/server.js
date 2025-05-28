@@ -6,19 +6,15 @@ const app = express();
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
-  app.use(
-    cors(
-      {
-      origin:  true,
-      credentials: true,
-    }
-    )
-  );
-app.set('trust proxy', 1); 
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+  })
+);
+app.set("trust proxy", 1);
 app.use(express.json());
-app.use(cookieParser());  
-
-
+app.use(cookieParser());
 
 // pool
 //   .connect()
@@ -32,79 +28,78 @@ app.use(cookieParser());
 
 pool.on("error", (err) => {
   console.error("Unexpected error on idle client", err);
-  process.exit(-1); 
+  process.exit(-1);
 });
 
 const persons = ["mukesh", "aadarsh", "kushal", "niraj"];
-
 
 //middleware
 
 const authenticateUser = async (req, res, next) => {
   const token = req.cookies?.accessToken;
-  if (!token) return res.status(401).json({ error: "not authorized" }); 
+  if (!token) return res.status(401).json({ error: "not authorized" });
   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, async (err, decoded) => {
     if (err) {
-      if (err.name === "TokenExpiredError") {  
-
-
+      if (err.name === "TokenExpiredError") {
         const refreshToken = req.cookies?.refreshToken;
-        if (refreshToken == null) return res.status(401).json({ error: "no refresh token" });
-        try{
-         const result = await pool.query("SELECT EXISTS (SELECT 1 FROM refresh_tokens WHERE token = $1)", [refreshToken]);
-         if (!result.rows[0].exists) return res.status(403).json({ error: "refresh token not found" });
-        }catch(error){
+        if (refreshToken == null)
+          return res.status(401).json({ error: "no refresh token" });
+        try {
+          const result = await pool.query(
+            "SELECT EXISTS (SELECT 1 FROM refresh_tokens WHERE token = $1)",
+            [refreshToken]
+          );
+          if (!result.rows[0].exists)
+            return res.status(403).json({ error: "refresh token not found" });
+        } catch (error) {
           return res.status(403).json({ error: "Refresh token not found" });
-        }       
+        }
         //  if (!refreshTokens.includes(refreshToken)) return res.status(403).json({ error: "refresh token not matched" });
         //  console.log(refreshTokens)
-        jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, async (err, user) => {
-          if (err) {
-            if (err.name === "TokenExpiredError") { 
-              await pool.query("DELETE FROM refresh_tokens WHERE token = $1", [refreshToken]);
-              return res.status(403).json({ error: "token expired" });
-           
-
+        jwt.verify(
+          refreshToken,
+          process.env.REFRESH_TOKEN_SECRET,
+          async (err, user) => {
+            if (err) {
+              if (err.name === "TokenExpiredError") {
+                await pool.query(
+                  "DELETE FROM refresh_tokens WHERE token = $1",
+                  [refreshToken]
+                );
+                return res.status(403).json({ error: "token expired" });
+              }
+              return res.status(403).json({ error: "Invalid refresh token" });
             }
-            return res.status(403).json({ error: "Invalid refresh token" });
-
+            const newAccessToken = jwt.sign(
+              { username: user.username },
+              process.env.ACCESS_TOKEN_SECRET,
+              { expiresIn: "15m" }
+            );
+            res.cookie("accessToken", newAccessToken, {
+              httpOnly: true,
+              secure: true,
+              sameSite: "lax",
+              maxAge: 15 * 60 * 1000,
+            });
+            console.log("token refreshed");
+            // res.json({ message: "Token refreshed" });
+            req.user = user;
+            next();
           }
-          const newAccessToken = jwt.sign(
-            { username: user.username },
-            process.env.ACCESS_TOKEN_SECRET,
-            { expiresIn: "15m" }
-          );
-          res.cookie("accessToken", newAccessToken, {
-            httpOnly: true,
-            secure: true,
-            sameSite: "lax",
-            maxAge: 15 * 60 * 1000, 
-          });
-          console.log("token refreshed")
-          // res.json({ message: "Token refreshed" });
-          req.user = user;
-          next();
-        });  
-        
-        
+        );
+
         // return res.status(401).json({ error: "TokenExpired", err }); // Let frontend know to refresh
-      }else{
+      } else {
         return res.status(403).json({ error: "Invalid token", err });
       }
-    
-    }// here 
+    } // here
     req.user = decoded;
     next();
   });
 };
 
-
-
-
-
-app.get("/api/expenses", authenticateUser,  async (req, res) => {
+app.get("/api/expenses", authenticateUser, async (req, res) => {
   try {
-    
     const result = await pool.query(
       "SELECT * FROM expenses WHERE transaction_complete = FALSE ORDER BY id_ ASC"
     );
@@ -112,7 +107,7 @@ app.get("/api/expenses", authenticateUser,  async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     console.error(error.message);
-    res.status(500).send("server error");
+    res.status(500).json({ message: "server error" });
   }
 });
 
@@ -122,7 +117,7 @@ app.get("/api/expenses/expenseList", authenticateUser, async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     console.error(error.message);
-    res.status(500).send("server error");
+    res.status(500).json({ message: "server error" });
   }
 });
 
@@ -155,11 +150,11 @@ app.post("/api/login", async (req, res) => {
         process.env.REFRESH_TOKEN_SECRET,
         { expiresIn: "7d" }
       );
-      await pool.query("DELETE FROM refresh_tokens WHERE token = $1", [refreshToken]);
+      await pool.query("DELETE FROM refresh_tokens WHERE user_id = $1", [user.id_,]);
 
       await pool.query(
         "INSERT INTO refresh_tokens (user_id, token) VALUES ($1, $2) ON CONFLICT (token) DO NOTHING",
-        [user.id_, refreshToken]  // Use id_ from users table
+        [user.id_, refreshToken] 
       );
       // refreshTokens.push(refreshToken);
 
@@ -167,24 +162,24 @@ app.post("/api/login", async (req, res) => {
         httpOnly: true,
         secure: true,
         sameSite: "lax",
-        maxAge: 15 * 60 * 1000, 
+        maxAge: 15 * 60 * 1000,
       });
       res.cookie("refreshToken", refreshToken, {
         httpOnly: true,
         secure: true,
         sameSite: "lax",
-        maxAge: 7 *24* 60 * 60 * 1000, 
+        maxAge: 7 * 24 * 60 * 60 * 1000,
       });
 
       res.json({ message: "Login Successfull" });
     }
   } catch (error) {
-    console.log("server error", error)
-    res.status(500).json({ message: "Error login in",  });
+    console.log("server error", error);
+    res.status(500).json({ message: "Error login in" });
   }
 });
 
-// insert here 
+// insert here
 
 app.post("/api/expenses", async (req, res) => {
   // console.log(req.body)
@@ -206,7 +201,7 @@ app.post("/api/expenses", async (req, res) => {
     res.status(200).json(result.rows[0]);
   } catch (error) {
     console.error(error.message);
-    res.status(500).send("server error");
+    res.status(500).json({ message: "Error inserting expense" });
   }
 });
 
@@ -224,10 +219,10 @@ app.post("/api/expenses/save-states", async (req, res) => {
       );
     }
 
-    res.status(200).send({ message: "All states updated successfully" });
+    res.status(200).json({ message: "All states updated successfully" });
   } catch (error) {
     console.error("Error updating states:", error);
-    res.status(505).send({ message: "Failed to update states" });
+    res.status(500).json({ message: "Failed to update states" });
   }
 });
 
@@ -239,6 +234,10 @@ app.delete("/api/expenses/:id", async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: "Failed to delete expense" });
   }
+});
+
+app.use((req, res) => {
+  res.status(404).json({ message: "Route not found" });
 });
 
 app.listen(5000, () => {

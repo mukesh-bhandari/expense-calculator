@@ -9,7 +9,7 @@ const app = express();
 app.use('/api', createProxyMiddleware({
   target: 'https://expense-calculator-u4zp.onrender.com',  // your actual backend Render URL
   changeOrigin: true,
-  pathRewrite: { '^/api': '' }
+  // pathRewrite: { '^/api': '' }
 }));
 
 // Serve frontend files from Vite build
