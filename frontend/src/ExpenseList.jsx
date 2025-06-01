@@ -8,7 +8,7 @@ import { useNavigate } from "react-router-dom";
 function ExpenseList({
   persons = ["mukesh", "aadarsh", "kushal", "niraj"],
   newExpense,
-  onDelete,
+  // onDelete,
 }) {
   const [expenses, setExpenses] = useState([]);
 
@@ -284,12 +284,12 @@ function ExpenseList({
                     );
                   })}
                    {/* delete button */}
-                  <button
+                  {/* <button
                   className="delete-btn"
                   onClick={(e) => onDelete(expense.id_)}
                 >
                   <FontAwesomeIcon icon={faTrash} />
-                </button>
+                </button> */}
                 </div>
                
                 
