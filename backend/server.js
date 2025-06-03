@@ -6,9 +6,15 @@ const app = express();
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
+
+app.get('/api/health', (req, res) => {
+  res.send('OK');
+});
+
+
 app.use(
   cors({
-    origin: true,
+    origin: [process.env.FRONTEND_PROD_URL ,process.env.FRONTEND_DEV_URL],
     credentials: true,
   })
 );
